@@ -1,5 +1,4 @@
 import os
-import json
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -8,10 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from twilio.rest import Client
 
-from app.cookies_utils import set_cookies, get_cookies, clear_cookies
 from app.prompts import SYSTEM_PROMPT
-from app.openai_utils import gpt_without_functions, summarise_conversation
-from app.redis_utils import redis_conn
+from app.xai_utils import gpt_without_functions, summarise_conversation
 from app.logger_utils import logger
 
 # Load environment variables from a .env file
@@ -23,80 +20,91 @@ TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 
 app = FastAPI(
-    title="Twilio-OpenAI-WhatsApp-Bot",
-    description="Twilio OpenAI WhatsApp Bot",
-    version="0.0.1",
+    title="WhatsApp-Bot",
+    description="WhatsApp Bot",
+    version="0.0.2",
     contact={
-        "name": "Lena Shakurova",
-        "url": "http://shakurova.io/",
-        "email": "lena@shakurova.io",
-    }
+        "name": "Kashyap Patel",
+        "url": "https://vyas.guru/",
+        "email": "kashyap@vyas.guru",
+    },
 )
 
 app.add_middleware(
-    CORSMiddleware, 
-    allow_origins=["*"], 
-    allow_credentials=True, 
-    allow_methods=["*"], 
-    allow_headers=["*"]
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+
 def respond(to_number, message) -> None:
-    """ Send a message via Twilio WhatsApp """
-    TWILIO_WHATSAPP_PHONE_NUMBER = "whatsapp:" + TWILIO_WHATSAPP_NUMBER
+    """Send a message via Twilio WhatsApp"""
+    TWILIO_WHATSAPP_PHONE_NUMBER = "whatsapp:" + TWILIO_WHATSAPP_NUMBER  # type: ignore
     twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
     from_whatsapp_number = TWILIO_WHATSAPP_PHONE_NUMBER
-    twilio_client.messages.create(body=message,
-                                  from_=from_whatsapp_number,
-                                  to=to_number)
+    twilio_client.messages.create(
+        body=message, from_=from_whatsapp_number, to=to_number
+    )
 
 
-@app.post('/whatsapp-endpoint')
-async def whatsapp_endpoint(request: Request, From: str = Form(...), Body: str = Form(...)):
-    logger.info(f'WhatsApp endpoint triggered...')
-    logger.info(f'Request: {request}')
-    logger.info(f'Body: {Body}')
-    logger.info(f'From: {From}')
+@app.get("/")
+async def root():
+    return {"message": "WhatsApp Bot is running!"}
+
+
+@app.post("/whatsapp-endpoint")
+async def whatsapp_endpoint(
+    request: Request, From: str = Form(...), Body: str = Form(...)
+):
+    logger.info(f"WhatsApp endpoint triggered...")
+    logger.info(f"Request: {request}")
+    logger.info(f"Body: {Body}")
+    logger.info(f"From: {From}")
 
     query = Body
-    phone_no = From.replace('whatsapp:+', '')
+    phone_no = From.replace("whatsapp:+", "")
     chat_session_id = phone_no
 
-    # Retrieve chat history from Redis
-    history = get_cookies(redis_conn, f'whatsapp_twilio_demo_{chat_session_id}_history') or []
-    if history:
-        history = json.loads(history)
-    
+    # Initialize chat history (no persistence without Redis)
+    history = []
+
     # Append the user's query to the chat history
-    history.append({"role": 'user', "content": query})
+    history.append({"role": "user", "content": query})
 
     # Summarize the conversation history
     history_summary = summarise_conversation(history)
 
     # Format the system prompt with the conversation summary and current date
     system_prompt = SYSTEM_PROMPT.format(
-            history_summary=history_summary,
-            today=datetime.now().date()
+        history_summary=history_summary, today=datetime.now().date()
     )
 
-    # Get a response from OpenAI's GPT model
-    openai_response = gpt_without_functions(
-                        model="gpt-4o",
-                        stream=False,
-                        messages=[
-                            {'role': 'system', 'content': system_prompt}, 
-                            {'role': 'assistant', 'content': "Hi there, how can I help you?"}
-                        ] + history)
-    chatbot_response = openai_response.choices[0].message.content.strip()
+    # Get a response from xAI's GPT model
+    model_response = gpt_without_functions(
+        model="grok-4-1-fast-non-reasoning",
+        stream=False,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "assistant", "content": "Hi there, how can I help you?"},
+        ]
+        + history,
+    )
+    chatbot_response = model_response
 
-    # Append the assistant's response to the chat history on Redis
-    history.append({'role': 'assistant', 'content': chatbot_response},)
-    set_cookies(redis_conn, name=f'whatsapp_twilio_demo_{chat_session_id}_history', value=json.dumps(history))
+    # Append the assistant's response to the chat history
+    history.append(
+        {"role": "assistant", "content": chatbot_response},
+    )
+
+    logger.info(f"Response: {chatbot_response}")
 
     # Send the assistant's response back to the user via WhatsApp
     respond(From, chatbot_response)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host='0.0.0.0', port=3002, reload=True)
+
+    uvicorn.run("app.main:app", host="0.0.0.0", port=3002, reload=True)

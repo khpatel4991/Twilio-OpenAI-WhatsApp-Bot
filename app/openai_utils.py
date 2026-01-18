@@ -1,6 +1,6 @@
 # Twilio-OpenAI-WhatsApp-Bot/app/openai_utils.py
 
-import os 
+import os
 from dotenv import load_dotenv
 from litellm import completion
 from app.prompts import SUMMARY_PROMPT
@@ -34,37 +34,36 @@ PRESENCE_PENALTY = 0
 
 SUPPORTED_MODELS = {
     # Groq Llama models
-    "groq/llama3-8b-8192", 
-    "groq/llama-3.1-8b-instant", 
-    "groq/llama-3.1-70b-versatile", 
+    "groq/llama3-8b-8192",
+    "groq/llama-3.1-8b-instant",
+    "groq/llama-3.1-70b-versatile",
     # OpenAI models
     "gpt-3.5-turbo-0125",
-    "gpt-4o", 
+    "gpt-4o",
     "gpt-4o-mini",
     "gpt-4-0125-preview",
     # Amazon Anthropic models
     "bedrock/anthropic.claude-3-sonnet-20240229-v1:0",
     "bedrock/anthropic.claude-3-opus-20240229-v1:0",
     "bedrock/anthropic.claude-v2:1",
-    }
+}
 
 
 def gpt_without_functions(model, stream=False, messages=[]):
-    """ GPT model without function call. """
+    """GPT model without function call."""
     if model not in SUPPORTED_MODELS:
         return False
     response = completion(
-        model=model, 
+        model=model,
         messages=messages,
         temperature=TEMPERATURE,
         max_tokens=MAX_TOKENS,
         top_p=TOP_P,
         frequency_penalty=FREQUENCY_PENALTY,
         presence_penalty=PRESENCE_PENALTY,
-        stream=stream
+        stream=stream,
     )
-    return response 
-
+    return response
 
 
 def summarise_conversation(history):
@@ -72,18 +71,19 @@ def summarise_conversation(history):
 
     conversation = ""
     for item in history[-70:]:
-        if 'user_input' in item:
+        if "user_input" in item:
             conversation += f"User: {item['user_input']}"
-        if 'bot_response' in item:
+        if "bot_response" in item:
             conversation += f"Bot: {item['bot_response']}"
 
     openai_response = gpt_without_functions(
-                        model="gpt-3.5-turbo-0125",
-                        stream=False,
-                        messages=[
-                            {'role': 'system', 'content': SUMMARY_PROMPT}, 
-                            {'role': 'user', 'content': conversation}
-                    ])
+        model="gpt-3.5-turbo-0125",
+        stream=False,
+        messages=[
+            {"role": "system", "content": SUMMARY_PROMPT},
+            {"role": "user", "content": conversation},
+        ],
+    )
     chatbot_response = openai_response.choices[0].message.content.strip()
 
     return chatbot_response
