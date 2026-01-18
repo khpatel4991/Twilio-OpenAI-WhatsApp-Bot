@@ -9,5 +9,9 @@ REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = os.getenv("REDIS_PORT")
 
 redis_conn = redis.Redis(
-    host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, db=0
+    host=REDIS_HOST,  # type: ignore
+    port=int(REDIS_PORT),  # type: ignore
+    password=REDIS_PASSWORD,
+    decode_responses=True,
+    username="default",
 )

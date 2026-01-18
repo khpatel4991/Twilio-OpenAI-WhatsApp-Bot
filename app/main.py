@@ -1,4 +1,5 @@
 import os
+import json
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -7,8 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from twilio.rest import Client
 
+from app.cookies_utils import set_cookies, get_cookies, clear_cookies
 from app.prompts import SYSTEM_PROMPT
 from app.xai_utils import gpt_without_functions, summarise_conversation
+from app.redis_utils import redis_conn
 from app.logger_utils import logger
 
 # Load environment variables from a .env file
@@ -22,7 +25,7 @@ TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 app = FastAPI(
     title="WhatsApp-Bot",
     description="WhatsApp Bot",
-    version="0.0.2",
+    version="0.1.0",
     contact={
         "name": "Kashyap Patel",
         "url": "https://vyas.guru/",
@@ -67,8 +70,12 @@ async def whatsapp_endpoint(
     phone_no = From.replace("whatsapp:+", "")
     chat_session_id = phone_no
 
-    # Initialize chat history (no persistence without Redis)
-    history = []
+    # Retrieve chat history from Redis
+    history = (
+        get_cookies(redis_conn, f"whatsapp_twilio_demo_{chat_session_id}_history") or []
+    )
+    if history:
+        history = json.loads(history)  # type: ignore
 
     # Append the user's query to the chat history
     history.append({"role": "user", "content": query})
@@ -96,6 +103,11 @@ async def whatsapp_endpoint(
     # Append the assistant's response to the chat history
     history.append(
         {"role": "assistant", "content": chatbot_response},
+    )
+    set_cookies(
+        redis_conn,
+        name=f"whatsapp_twilio_demo_{chat_session_id}_history",
+        value=json.dumps(history),
     )
 
     logger.info(f"Response: {chatbot_response}")
