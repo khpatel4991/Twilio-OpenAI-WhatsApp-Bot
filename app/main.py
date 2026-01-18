@@ -39,6 +39,11 @@ app.add_middleware(
 )
 
 
+@app.get("/")
+async def home():
+    return {"message": "Twilio WhatsApp Bot API", "status": "running"}
+
+
 def respond(to_number, message) -> None:
     """Send a message via Twilio WhatsApp"""
     TWILIO_WHATSAPP_PHONE_NUMBER = "whatsapp:" + TWILIO_WHATSAPP_NUMBER  # type: ignore
@@ -47,11 +52,6 @@ def respond(to_number, message) -> None:
     twilio_client.messages.create(
         body=message, from_=from_whatsapp_number, to=to_number
     )
-
-
-@app.get("/")
-async def root():
-    return {"message": "WhatsApp Bot is running!"}
 
 
 @app.post("/whatsapp-endpoint")
